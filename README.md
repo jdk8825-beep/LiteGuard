@@ -7,6 +7,10 @@ LiteGuard works in two layers:
 1. **Lite mode (default):** fast regex rules + Shannon-entropy checks. Zero dependencies, no network, runs in under a second on most repos.
 2. **AI mode (`--ai`, optional):** sends each finding (with secrets masked) to Claude, which labels it `true_positive`, `false_positive` or `needs_review` and suggests a fix. Findings the AI marks as false positives don't fail the build.
 
+## Watch how it works
+
+A 3-minute narrated walkthrough: [docs/liteguard-explainer.mp4](docs/liteguard-explainer.mp4) (open it and choose **View raw** to download or play). The interactive version of the same explainer is [docs/explainer.html](docs/explainer.html).
+
 ## What it finds
 
 | Category | Examples |

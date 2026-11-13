@@ -147,7 +147,7 @@ header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
 .step .ic{font-family:var(--mono);font-size:2.4cqw;font-weight:600;color:var(--dim)}
 .step b{display:block;font-size:1.55cqw;margin-top:.4cqw}
 .step small{display:block;font-size:1.15cqw;color:var(--dim)}
-.scene.on .step{animation:lit .5s var(--d) forwards}
+.scene.on .step{animation:rise .6s cubic-bezier(.2,.7,.2,1) var(--d,0s) both, lit .5s calc(var(--d) + .5s) forwards}
 @keyframes lit{to{border-color:var(--ok);box-shadow:0 0 0 .25cqw rgba(63,212,154,.18)}}
 .scene.on .step .ic{animation:litic .5s var(--d) forwards}
 @keyframes litic{to{color:var(--ok)}}
@@ -271,7 +271,7 @@ label.tog{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:va
       </div>
 
       <!-- 5 -->
-      <div class="scene" data-say="Before anything is shown or shared, secrets are masked. Only the first few characters are kept. So the report itself never leaks the key it just found, and neither does anything sent to the AI">
+      <div class="scene" data-say="Before anything is shown or shared, secrets are masked. Only the first few characters are kept. So the report itself never leaks the key it just found, and neither does anything sent to the AI.">
         <span class="eyebrow a">Privacy by default</span>
         <h2 class="h a" style="--d:.2s">Secrets are masked before they leave</h2>
         <div class="mask-box a" style="--d:.8s" id="mask"></div>
