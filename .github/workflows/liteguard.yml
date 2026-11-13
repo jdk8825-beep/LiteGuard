@@ -1,0 +1,39 @@
+name: LiteGuard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write   # lets the SARIF report show in Security > Code scanning
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . pytest
+      - run: pytest -q
+
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      # Lite mode: no API key needed. Add an ANTHROPIC_API_KEY repo secret and
+      # append --ai to get Claude's verdict on each finding.
+      - name: Scan repository
+        run: liteguard scan . --format sarif -o liteguard.sarif --fail-on critical
+      - name: Upload results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: liteguard.sarif

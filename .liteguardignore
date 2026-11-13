@@ -1,0 +1,4 @@
+# Paths LiteGuard should skip (glob patterns or folder names)
+tests/
+examples/
+liteguard/scanner.py
