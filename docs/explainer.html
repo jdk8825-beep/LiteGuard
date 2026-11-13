@@ -1,0 +1,502 @@
+<title>How LiteGuard Works</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single 16:9 "video screen" with narration, captions and chapters beneath it. */
+:root{
+  --bg:#eef2f6; --fg:#14202b; --muted:#5a6878; --panel:#ffffff; --line:#cfd8e2; --accent:#2f6fe4;
+  /* the screen keeps one dark look in both themes */
+  --stage:#0e1621; --stage2:#16233a; --ink:#e7eef6; --dim:#8a9bb0; --grid:#1d2b40;
+  --crit:#ff5d73; --high:#ff9150; --med:#ffcb52; --ok:#3fd49a; --ai:#93b5ff;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0a0f16; --fg:#e3e9f0; --muted:#93a1b2; --panel:#111924; --line:#243244; --accent:#78a2ff; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0a0f16; --fg:#e3e9f0; --muted:#93a1b2; --panel:#111924; --line:#243244; --accent:#78a2ff; color-scheme:dark}
+
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1040px;margin:0 auto;padding-block:28px 56px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:grid;gap:18px}
+header h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,38px);line-height:1.1;margin:0;text-wrap:balance}
+header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+
+/* ---------- player ---------- */
+.player{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.stage{position:relative;aspect-ratio:16/9;max-width:100%;background:var(--stage);color:var(--ink);
+  container-type:inline-size;overflow:hidden;font-family:var(--body)}
+.stage::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:4cqw 4cqw;opacity:.45;pointer-events:none}
+.scene{position:absolute;inset:0;padding:5cqw 6cqw;display:flex;flex-direction:column;gap:2cqw;
+  opacity:0;visibility:hidden;transition:opacity .45s, visibility .45s}
+.scene.on{opacity:1;visibility:visible}
+.paused .scene *, .paused .scene *::before, .paused .scene *::after{animation-play-state:paused!important}
+.eyebrow{font-family:var(--mono);font-size:1.25cqw;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.h{font-family:var(--display);font-weight:800;font-size:4cqw;line-height:1.05;margin:0;text-wrap:balance}
+.sub{font-size:1.7cqw;color:var(--dim);margin:0;max-width:60cqw}
+.mono{font-family:var(--mono)}
+
+.a{opacity:0}
+.scene.on .a{animation:rise .6s cubic-bezier(.2,.7,.2,1) var(--d,0s) both}
+@keyframes rise{from{opacity:0;transform:translateY(1.2cqw)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:scale(.6)}70%{transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,93,115,.55)}50%{box-shadow:0 0 0 1.4cqw rgba(255,93,115,0)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes travel{0%{left:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{left:100%;opacity:0}}
+
+/* scene 1: title */
+.s-title{justify-content:center;align-items:flex-start}
+.s-title svg{width:9cqw;height:auto}
+.s-title svg path{fill:none;stroke:var(--ai);stroke-width:3;stroke-dasharray:260;stroke-dashoffset:260}
+.s-title svg path.tick{stroke:var(--ok);stroke-dasharray:60;stroke-dashoffset:60}
+.scene.on svg path{animation:draw 1.6s ease var(--d,0s) forwards}
+.s-title .big{font-family:var(--display);font-weight:800;font-size:9cqw;line-height:.95;margin:0;letter-spacing:-.02em}
+.s-title .big span{color:var(--ai)}
+
+/* scene 2: problem flow */
+.flow{display:flex;align-items:center;gap:2cqw;margin-top:3cqw}
+.node{background:var(--stage2);border:1px solid #2a3b55;border-radius:1cqw;padding:1.6cqw 1.8cqw;min-width:0;flex:1}
+.node b{display:block;font-size:1.7cqw;margin-bottom:.6cqw}
+.node .mono{font-size:1.35cqw;color:var(--dim);word-break:break-all}
+.node .mono em{font-style:normal;color:var(--crit)}
+.wire{position:relative;flex:0 0 7cqw;height:2px;background:#33465f}
+.wire i{position:absolute;top:-.5cqw;width:1.1cqw;height:1.1cqw;border-radius:50%;background:var(--crit);opacity:0}
+.scene.on .wire i{animation:travel 1.4s linear var(--d,0s) 3}
+.node.bot{border-color:var(--crit)}
+.scene.on .node.bot{animation:rise .6s var(--d) both, pulse 1.6s calc(var(--d) + .6s) 4}
+.note{font-size:1.6cqw;color:var(--crit);font-weight:600}
+
+/* scene 3: code scan */
+.scan-wrap{display:grid;grid-template-columns:1fr 24cqw;gap:2.4cqw;min-height:0;flex:1}
+.code{position:relative;background:#0a111b;border:1px solid #23344b;border-radius:1cqw;padding:1.4cqw 0;overflow:hidden;font-family:var(--mono);font-size:1.38cqw}
+.ln{display:flex;gap:1.6cqw;padding:.32cqw 1.8cqw;white-space:pre;position:relative}
+.ln span:first-child{color:#4c5f78;width:2cqw;text-align:right;flex:none}
+.ln.flag{background:transparent}
+.scene.on .ln.flag{animation:flagbg .5s var(--d) both}
+@keyframes flagbg{to{background:rgba(255,93,115,.16);box-shadow:inset .35cqw 0 0 var(--crit)}}
+.scene.on .ln.flag.m{animation-name:flagm}
+@keyframes flagm{to{background:rgba(255,203,82,.13);box-shadow:inset .35cqw 0 0 var(--med)}}
+.beam{position:absolute;left:0;right:0;height:3cqw;top:-3cqw;
+  background:linear-gradient(180deg,transparent,rgba(147,181,255,.35),transparent);border-bottom:2px solid var(--ai)}
+.scene.on .beam{animation:sweep 6.5s linear 1.2s both}
+@keyframes sweep{from{top:-3cqw}to{top:100%}}
+.rules{display:flex;flex-direction:column;gap:.9cqw}
+.rule{display:flex;gap:1cqw;align-items:baseline;background:var(--stage2);border-radius:.7cqw;padding:.8cqw 1.1cqw;font-size:1.3cqw}
+.rule code{font-family:var(--mono);font-weight:600;font-size:1.2cqw;color:var(--stage);padding:.15cqw .5cqw;border-radius:.4cqw;background:var(--crit)}
+.rule.m code{background:var(--med)}
+
+/* scene 4: entropy */
+.ent{display:grid;gap:1.8cqw;margin-top:2cqw;position:relative}
+.erow{display:grid;grid-template-columns:30cqw 1fr 7cqw;align-items:center;gap:1.6cqw;font-size:1.5cqw}
+.erow .mono{font-size:1.45cqw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track{height:2.2cqw;background:#152236;border-radius:.5cqw;position:relative;overflow:visible}
+.fill{height:100%;width:0;border-radius:.5cqw;background:var(--ai)}
+.fill.hot{background:var(--crit)}
+.scene.on .fill{animation:grow 1.4s cubic-bezier(.2,.7,.2,1) var(--d) forwards}
+@keyframes grow{to{width:var(--w)}}
+.thr{position:absolute;top:-1.2cqw;bottom:-1.2cqw;width:0;border-left:2px dashed var(--med)}
+.thr span{position:absolute;top:-2.6cqw;left:-4cqw;width:8cqw;text-align:center;font-family:var(--mono);font-size:1.15cqw;color:var(--med)}
+.val{font-family:var(--mono);font-weight:600;text-align:right}
+
+/* scene 5: masking */
+.mask-box{margin-top:3cqw;align-self:flex-start;background:#0a111b;border:1px solid #23344b;border-radius:1cqw;padding:2.4cqw 3cqw;font-family:var(--mono);font-size:2.6cqw}
+.mask-box .k{color:var(--dim)}
+.ch{position:relative;display:inline-block;width:.62em;text-align:center}
+.ch .r{color:var(--crit)}
+.ch .s{position:absolute;inset:0;color:var(--ok);opacity:0}
+.scene.on .ch.x .r{animation:out .25s var(--d) forwards}
+.scene.on .ch.x .s{animation:in .25s var(--d) forwards}
+@keyframes out{to{opacity:0}} @keyframes in{to{opacity:1}}
+.chips{display:flex;gap:1.4cqw;flex-wrap:wrap}
+.chip{font-size:1.4cqw;border:1px solid #33465f;border-radius:99px;padding:.5cqw 1.4cqw;color:var(--ink)}
+.chip b{color:var(--ok)}
+
+/* scene 6: AI triage */
+.tri{display:grid;grid-template-columns:1fr 13cqw 1fr;align-items:center;gap:2cqw;flex:1;min-height:0}
+.col{display:grid;gap:1.2cqw}
+.card{background:var(--stage2);border:1px solid #2a3b55;border-radius:.9cqw;padding:1cqw 1.3cqw;font-size:1.3cqw}
+.card .mono{display:block;color:var(--dim);font-size:1.15cqw}
+.v{display:inline-block;font-family:var(--mono);font-weight:600;font-size:1.1cqw;padding:.15cqw .6cqw;border-radius:.4cqw;color:var(--stage);margin-bottom:.4cqw}
+.v.tp{background:var(--crit)} .v.fp{background:var(--ok)} .v.nr{background:var(--med)}
+.brain{aspect-ratio:1;border-radius:50%;display:grid;place-items:center;text-align:center;
+  background:radial-gradient(circle at 50% 40%,#2b4677,#16233a 70%);border:2px solid var(--ai);font-family:var(--display);font-weight:800;font-size:2cqw;color:var(--ai)}
+.brain small{display:block;font-family:var(--mono);font-weight:400;font-size:1cqw;color:var(--dim)}
+.scene.on .brain{animation:pop .6s var(--d) both, glow 1.8s calc(var(--d) + .6s) ease-in-out 4}
+@keyframes glow{50%{box-shadow:0 0 3cqw rgba(147,181,255,.45)}}
+
+/* scene 7: outputs + gate */
+.outs{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6cqw}
+.out{background:var(--stage2);border:1px solid #2a3b55;border-radius:.9cqw;padding:1.2cqw 1.4cqw}
+.out b{font-size:1.6cqw;display:block}
+.out pre{margin:.6cqw 0 0;font-family:var(--mono);font-size:1.05cqw;color:var(--dim);white-space:pre-wrap}
+.gate{display:grid;grid-template-columns:repeat(4,1fr) 18cqw;gap:1cqw;align-items:stretch;margin-top:1cqw}
+.sev{border-radius:.7cqw;padding:1cqw;text-align:center;font-family:var(--mono);font-size:1.3cqw;font-weight:600;color:var(--stage)}
+.sev.low{background:#6f86a8}.sev.medium{background:var(--med)}.sev.high{background:var(--high)}.sev.critical{background:var(--crit)}
+.sev.dimmed{filter:saturate(.35) brightness(.6)}
+.exit{border:2px solid var(--crit);border-radius:.7cqw;display:grid;place-items:center;text-align:center;font-family:var(--mono);font-size:1.3cqw;color:var(--crit);font-weight:600;padding:.6cqw}
+.failon{font-family:var(--mono);font-size:1.3cqw;color:var(--dim)}
+.failon b{color:var(--high)}
+
+/* scene 8: pipeline */
+.pipe{display:flex;align-items:center;gap:1.2cqw;margin-top:3cqw}
+.step{flex:1;min-width:0;background:var(--stage2);border:1px solid #2a3b55;border-radius:1cqw;padding:1.6cqw 1.4cqw;text-align:center}
+.step .ic{font-family:var(--mono);font-size:2.4cqw;font-weight:600;color:var(--dim)}
+.step b{display:block;font-size:1.55cqw;margin-top:.4cqw}
+.step small{display:block;font-size:1.15cqw;color:var(--dim)}
+.scene.on .step{animation:lit .5s var(--d) forwards}
+@keyframes lit{to{border-color:var(--ok);box-shadow:0 0 0 .25cqw rgba(63,212,154,.18)}}
+.scene.on .step .ic{animation:litic .5s var(--d) forwards}
+@keyframes litic{to{color:var(--ok)}}
+.arrow{flex:0 0 2.6cqw;height:2px;background:#33465f;position:relative}
+.arrow::after{content:"";position:absolute;right:-1px;top:-.45cqw;border:.5cqw solid transparent;border-left-color:#33465f;border-right:0}
+
+/* scene 9: recap */
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6cqw;margin-top:1cqw}
+.pillar{border-top:.35cqw solid var(--ai);background:var(--stage2);border-radius:.6cqw;padding:1.4cqw 1.5cqw}
+.pillar:nth-child(1){border-top-color:var(--med)} .pillar:nth-child(3){border-top-color:var(--ok)}
+.pillar b{font-family:var(--display);font-size:2cqw;display:block}
+.pillar p{margin:.6cqw 0 0;font-size:1.35cqw;color:var(--dim)}
+.cmd{font-family:var(--mono);font-size:1.7cqw;background:#0a111b;border:1px solid #23344b;border-radius:.8cqw;padding:1.2cqw 1.6cqw;align-self:flex-start}
+.cmd span{color:var(--ok)}
+
+/* caption + big play overlay */
+.cap{position:absolute;left:6cqw;right:6cqw;bottom:2.2cqw;text-align:center;pointer-events:none}
+.cap span{display:inline;background:rgba(5,9,15,.82);color:#fff;font-size:1.75cqw;line-height:1.7;padding:.3cqw .9cqw;border-radius:.5cqw;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.cap span:empty{display:none}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(6,10,16,.45);border:0;cursor:pointer;color:#fff;font:inherit;z-index:5}
+.overlay .pbtn{display:flex;align-items:center;gap:1.4cqw;background:var(--ai);color:var(--stage);font-family:var(--display);font-weight:800;font-size:2.4cqw;padding:1.4cqw 2.8cqw;border-radius:99px}
+.overlay .pbtn svg{width:2.4cqw;height:2.4cqw}
+.overlay:focus-visible .pbtn{outline:3px solid #fff;outline-offset:4px}
+
+/* controls */
+.bar{display:flex;gap:4px;padding:10px 14px 0}
+.seg{flex:1;height:5px;border-radius:3px;background:var(--line);overflow:hidden;cursor:pointer;border:0;padding:0}
+.seg i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s linear}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px 14px}
+.btn{font:600 14px var(--body);color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.btn:focus-visible,.seg:focus-visible,.chap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.status{margin-left:auto;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+label.tog{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+
+/* chapters + transcript */
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:18px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;min-width:0}
+.box h2{font-family:var(--display);font-size:18px;margin:0 0 10px}
+.chaps{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:c}
+.chap{width:100%;text-align:left;font:500 14px var(--body);color:var(--fg);background:transparent;border:0;border-radius:6px;padding:6px 8px;cursor:pointer;display:flex;gap:10px}
+.chap span{color:var(--muted);font-family:var(--mono);font-size:12px;padding-top:2px}
+.chap:hover{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+.chap[aria-current="true"]{background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent)}
+.tx p{margin:0 0 10px;max-width:68ch;color:var(--muted)}
+.tx p b{color:var(--fg)}
+@media (max-width:720px){.lower{grid-template-columns:1fr}}
+@media (prefers-reduced-motion: reduce){
+  .scene.on .a,.scene.on .fill,.scene.on .step,.scene.on svg path{animation-duration:.01s!important;animation-delay:0s!important}
+  .scene.on .beam,.scene.on .wire i{animation:none}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>How LiteGuard works</h1>
+    <p>A narrated, animated walkthrough of the scanner: what problem it solves, how the lite method and the AI layer work, and how it guards every push on GitHub. Press play and turn your sound on.</p>
+  </header>
+
+  <section class="player" aria-label="Explainer video">
+    <div class="stage" id="stage">
+
+      <!-- 1 -->
+      <div class="scene s-title on" data-say="This is LiteGuard, a lightweight security scanner with an optional AI layer. Its job is simple. Catch leaked secrets and risky code, before they ever reach GitHub.">
+        <svg viewBox="0 0 80 92" aria-hidden="true"><path d="M40 4 L74 16 V44 C74 66 58 82 40 88 C22 82 6 66 6 44 V16 Z"/><path class="tick" d="M24 46 L36 58 L58 34" style="--d:1.2s"/></svg>
+        <p class="big a" style="--d:.4s">Lite<span>Guard</span></p>
+        <p class="sub a" style="--d:1s">Catch leaked secrets and risky code before they reach GitHub.</p>
+        <div class="chips a" style="--d:1.6s"><span class="chip">Python CLI</span><span class="chip">Zero dependencies</span><span class="chip">Optional Claude triage</span><span class="chip">GitHub Actions</span></div>
+      </div>
+
+      <!-- 2 -->
+      <div class="scene" data-say="Here is the problem. A developer hardcodes an API key to test something, then commits and pushes. Once it lands in a public repository, automated bots can find that key within minutes, and anyone can use it.">
+        <span class="eyebrow a">The problem</span>
+        <h2 class="h a" style="--d:.2s">One pushed key is all it takes</h2>
+        <div class="flow">
+          <div class="node a" style="--d:1s"><b>Your laptop</b><span class="mono">app.py<br>key = "<em>AKIA2E0A8F3B…</em>"</span></div>
+          <div class="wire a" style="--d:3s"><i style="--d:3.2s"></i></div>
+          <div class="node a" style="--d:4s"><b>git push</b><span class="mono">public repo<br>main ← 1 commit</span></div>
+          <div class="wire a" style="--d:6s"><i style="--d:6.2s"></i></div>
+          <div class="node bot" style="--d:7.5s"><b>Scraper bots</b><span class="mono">scan new commits<br>key found ✗</span></div>
+        </div>
+        <p class="note a" style="--d:9.5s">Leaked cloud keys are often abused within minutes.</p>
+      </div>
+
+      <!-- 3 -->
+      <div class="scene" data-say="LiteGuard's first layer is the lite method. It walks through every text file, and checks each line against about twenty pattern rules. Some rules look for secrets, like AWS, GitHub, or Anthropic keys, and private key blocks. Others look for risky code, like eval, shell equals true, disabled certificate checks, or SQL built from strings.">
+        <span class="eyebrow a">Layer 1 · The lite method</span>
+        <h2 class="h a" style="--d:.2s">Pattern rules sweep every line</h2>
+        <div class="scan-wrap">
+          <div class="code a" style="--d:.6s">
+            <div class="beam"></div>
+            <div class="ln"><span>1</span>import subprocess, requests</div>
+            <div class="ln flag" style="--d:2.1s"><span>2</span>AWS_KEY = "AKIA2E0A8F3B9C1D7E4F"</div>
+            <div class="ln"><span>3</span></div>
+            <div class="ln"><span>4</span>def run(cmd):</div>
+            <div class="ln flag" style="--d:3.6s"><span>5</span>    subprocess.run(cmd, shell=True)</div>
+            <div class="ln"><span>6</span>def calc(expr):</div>
+            <div class="ln flag" style="--d:4.6s"><span>7</span>    return eval(expr)</div>
+            <div class="ln flag" style="--d:5.4s"><span>8</span>requests.get(url, verify=False)</div>
+            <div class="ln flag" style="--d:6.2s"><span>9</span>cur.execute(f"... WHERE id={uid}")</div>
+            <div class="ln flag m" style="--d:7s"><span>10</span>hashlib.md5(data)</div>
+          </div>
+          <div class="rules">
+            <div class="rule a" style="--d:2.3s"><code>SEC001</code>AWS access key</div>
+            <div class="rule a" style="--d:3.8s"><code>PY002</code>shell=True</div>
+            <div class="rule a" style="--d:4.8s"><code>PY001</code>eval()</div>
+            <div class="rule a" style="--d:5.6s"><code>PY007</code>TLS check off</div>
+            <div class="rule a" style="--d:6.4s"><code>PY008</code>SQL injection</div>
+            <div class="rule m a" style="--d:7.2s"><code>PY006</code>weak hash</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="scene" data-say="Not every secret matches a known pattern. So LiteGuard also measures randomness, called Shannon entropy. Ordinary words and repeated letters score low. A random token scores high. Anything above four point three bits per character is flagged as a possible secret.">
+        <span class="eyebrow a">Layer 1 · Entropy check</span>
+        <h2 class="h a" style="--d:.2s">Random-looking strings get flagged</h2>
+        <p class="sub a" style="--d:.5s">Shannon entropy, in bits per character. Computed live on this page.</p>
+        <div class="ent" id="ent"></div>
+      </div>
+
+      <!-- 5 -->
+      <div class="scene" data-say="Before anything is shown or shared, secrets are masked. Only the first few characters are kept. So the report itself never leaks the key it just found, and neither does anything sent to the AI">
+        <span class="eyebrow a">Privacy by default</span>
+        <h2 class="h a" style="--d:.2s">Secrets are masked before they leave</h2>
+        <div class="mask-box a" style="--d:.8s" id="mask"></div>
+        <div class="chips a" style="--d:4s"><span class="chip"><b>✓</b> terminal report</span><span class="chip"><b>✓</b> JSON and SARIF files</span><span class="chip"><b>✓</b> what Claude sees</span></div>
+      </div>
+
+      <!-- 6 -->
+      <div class="scene" data-say="The second layer is optional. Run it with dash dash AI, and each finding, with secrets still masked, is sent to Claude, along with a few lines of surrounding code. Claude labels it a true positive, a false positive, or needs review, and suggests a fix. False positives, like test fixtures, no longer fail your build.">
+        <span class="eyebrow a">Layer 2 · AI triage (--ai)</span>
+        <h2 class="h a" style="--d:.2s">Claude separates real risks from noise</h2>
+        <div class="tri">
+          <div class="col">
+            <div class="card a" style="--d:1.2s">PY001 eval()<span class="mono">app/calc.py:13</span></div>
+            <div class="card a" style="--d:1.5s">SEC008 password=<span class="mono">tests/fixtures.py:4</span></div>
+            <div class="card a" style="--d:1.8s">PY003 os.system<span class="mono">scripts/build.py:22</span></div>
+          </div>
+          <div class="brain" style="--d:3s">Claude<small>masked context</small></div>
+          <div class="col">
+            <div class="card a" style="--d:8s"><span class="v tp">TRUE POSITIVE</span><br>User input reaches eval. Use ast.literal_eval.</div>
+            <div class="card a" style="--d:9s"><span class="v fp">FALSE POSITIVE</span><br>Dummy password in a test fixture.</div>
+            <div class="card a" style="--d:10s"><span class="v nr">NEEDS REVIEW</span><br>Command is constant here; check callers.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7 -->
+      <div class="scene" data-say="Results come out as a readable report, as JSON, or as SARIF, the format GitHub code scanning understands. LiteGuard also returns an exit code. If anything at or above your chosen severity is found, it exits with one, and that stops the build.">
+        <span class="eyebrow a">Reports and the CI gate</span>
+        <h2 class="h a" style="--d:.2s">Three report formats, one exit code</h2>
+        <div class="outs">
+          <div class="out a" style="--d:1s"><b>Text</b><pre>[HIGH] PY001 eval()
+  app.py:13</pre></div>
+          <div class="out a" style="--d:2s"><b>JSON</b><pre>{"rule_id": "PY001",
+ "severity": "high"}</pre></div>
+          <div class="out a" style="--d:3s"><b>SARIF 2.1.0</b><pre>→ GitHub Security tab
+  code scanning alerts</pre></div>
+        </div>
+        <span class="failon a" style="--d:6s">liteguard scan . <b>--fail-on high</b></span>
+        <div class="gate">
+          <div class="sev low dimmed a" style="--d:6.4s">low</div>
+          <div class="sev medium dimmed a" style="--d:6.6s">medium</div>
+          <div class="sev high a" style="--d:6.8s">high</div>
+          <div class="sev critical a" style="--d:7s">critical</div>
+          <div class="exit a" style="--d:8.5s">exit 1<br>build blocked</div>
+        </div>
+      </div>
+
+      <!-- 8 -->
+      <div class="scene" data-say="Put it all together in GitHub Actions. On every push and pull request, the workflow runs the tests, scans the repository, and uploads the results to the Security tab. So problems show up right next to your code, before anything is merged.">
+        <span class="eyebrow a">Automation</span>
+        <h2 class="h a" style="--d:.2s">GitHub Actions guards every push</h2>
+        <div class="pipe">
+          <div class="step a" style="--d:1.5s"><div class="ic">⇡</div><b>Push / PR</b><small>on: push, pull_request</small></div>
+          <div class="arrow a" style="--d:2s"></div>
+          <div class="step a" style="--d:3.5s"><div class="ic">✓</div><b>Tests</b><small>pytest -q</small></div>
+          <div class="arrow a" style="--d:4s"></div>
+          <div class="step a" style="--d:5s"><div class="ic">⌕</div><b>Scan</b><small>liteguard scan .</small></div>
+          <div class="arrow a" style="--d:5.5s"></div>
+          <div class="step a" style="--d:6.5s"><div class="ic">⛨</div><b>Security tab</b><small>upload-sarif</small></div>
+        </div>
+      </div>
+
+      <!-- 9 -->
+      <div class="scene" data-say="That's LiteGuard. Fast pattern rules and entropy checks for the lite method. Claude for smart triage. And GitHub Actions to guard every push. Install it, run liteguard scan, and catch problems before anyone else does.">
+        <span class="eyebrow a">Recap</span>
+        <h2 class="h a" style="--d:.2s">Lite by default, smart when you need it</h2>
+        <div class="pillars">
+          <div class="pillar a" style="--d:1s"><b>Lite method</b><p>~20 regex rules plus an entropy check. No network, no dependencies.</p></div>
+          <div class="pillar a" style="--d:3.5s"><b>AI triage</b><p>Claude labels each masked finding and suggests a fix.</p></div>
+          <div class="pillar a" style="--d:5s"><b>CI gate</b><p>SARIF to the Security tab, exit code to stop risky merges.</p></div>
+        </div>
+        <div class="cmd a" style="--d:8s"><span>$</span> pip install -e .<br><span>$</span> liteguard scan .</div>
+      </div>
+
+      <div class="cap" aria-live="polite"><span id="cap"></span></div>
+      <button class="overlay" id="overlay" aria-label="Play explainer with narration">
+        <span class="pbtn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>Play with voice</span>
+      </button>
+    </div>
+
+    <div class="bar" id="bar"></div>
+    <div class="controls">
+      <button class="btn" id="prev" aria-label="Previous scene">◀ Prev</button>
+      <button class="btn primary" id="play">Play</button>
+      <button class="btn" id="next" aria-label="Next scene">Next ▶</button>
+      <label class="tog"><input type="checkbox" id="voiceOn" checked> Voice</label>
+      <label class="tog">Speed <select id="rate"><option value="0.9">0.9×</option><option value="1" selected>1×</option><option value="1.15">1.15×</option></select></label>
+      <span class="status" id="status">Scene 1 of 9</span>
+    </div>
+  </section>
+
+  <section class="lower">
+    <div class="box">
+      <h2>Chapters</h2>
+      <ol class="chaps" id="chaps"></ol>
+    </div>
+    <div class="box tx">
+      <h2>Transcript</h2>
+      <div id="tx"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const scenes = [...stage.querySelectorAll('.scene')];
+  const titles = ['What LiteGuard is','The problem','Pattern rules','Entropy check','Masking secrets','AI triage','Reports and CI gate','GitHub Actions','Recap'];
+  const capEl = document.getElementById('cap'), statusEl = document.getElementById('status');
+  const playBtn = document.getElementById('play'), overlay = document.getElementById('overlay');
+  const voiceOn = document.getElementById('voiceOn'), rateSel = document.getElementById('rate');
+  const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+  if (!synth) { voiceOn.checked = false; voiceOn.disabled = true; }
+
+  // sentences per scene
+  const lines = scenes.map(s => s.dataset.say.match(/[^.!?]+(?:[.!?](?!\w)|$)+/g).map(t => t.trim()).filter(Boolean));
+
+  // ---- entropy scene, computed for real ----
+  function entropy(s){ const m={}; for (const c of s) m[c]=(m[c]||0)+1; let h=0; for (const k in m){ const p=m[k]/s.length; h-=p*Math.log2(p);} return h; }
+  const samples = ['aaaaaaaaaaaaaaaaaaaaaaaa','database_password_here','Zx9Qp2Lm7Rt4Vb8Nk3Wy6Hs1Jd5'];
+  const MAX = 5.2, THR = 4.3;
+  const ent = document.getElementById('ent');
+  ent.innerHTML = samples.map((s,i) => {
+    const h = entropy(s), hot = h >= THR;
+    return `<div class="erow a" style="--d:${1.2+i*2.2}s"><span class="mono">"${s}"</span>
+      <div class="track"><div class="fill ${hot?'hot':''}" style="--w:${(h/MAX*100).toFixed(1)}%;--d:${1.5+i*2.2}s"></div>
+      ${i===0?`<div class="thr" style="left:${(THR/MAX*100).toFixed(1)}%"><span>4.3 limit</span></div>`:''}</div>
+      <span class="val" style="color:${hot?'var(--crit)':'var(--ink)'}">${h.toFixed(2)}</span></div>`;
+  }).join('');
+
+  // ---- masking scene ----
+  const key = 'AKIA2E0A8F3B9C1D7E4F', keep = 4;
+  document.getElementById('mask').innerHTML = '<span class="k">AWS_KEY = "</span>' +
+    [...key].map((c,i) => i < keep ? `<span class="ch"><span class="r" style="color:var(--ink)">${c}</span></span>`
+      : `<span class="ch x" style="--d:${1.6+(i-keep)*0.09}s"><span class="r">${c}</span><span class="s">*</span></span>`).join('') +
+    '<span class="k">"</span>';
+
+  // ---- chapters, transcript, progress bar ----
+  const chaps = document.getElementById('chaps'), bar = document.getElementById('bar');
+  chaps.innerHTML = titles.map((t,i)=>`<li><button class="chap" data-i="${i}"><span>${String(i+1).padStart(2,'0')}</span>${t}</button></li>`).join('');
+  bar.innerHTML = titles.map((t,i)=>`<button class="seg" data-i="${i}" aria-label="Go to ${t}"><i></i></button>`).join('');
+  document.getElementById('tx').innerHTML = scenes.map((s,i)=>`<p><b>${titles[i]}.</b> ${s.dataset.say}</p>`).join('');
+  const segs = [...bar.querySelectorAll('.seg i')];
+
+  // ---- voice ----
+  let voice = null;
+  function pickVoice(){
+    if (!synth) return;
+    const vs = synth.getVoices().filter(v => /^en/i.test(v.lang));
+    voice = vs.find(v => /natural|online/i.test(v.name)) || vs.find(v => /google/i.test(v.name)) || vs.find(v=>/en-(US|GB)/i.test(v.lang)) || vs[0] || null;
+  }
+  if (synth){ pickVoice(); synth.onvoiceschanged = pickVoice; }
+
+  // ---- playback engine ----
+  let idx = 0, k = 0, playing = false, token = 0, timer = null, safety = null;
+
+  function show(i){
+    scenes.forEach(s => s.classList.remove('on'));
+    void stage.offsetWidth;                      // restart CSS animations
+    scenes[i].classList.add('on');
+    idx = i; k = 0;
+    statusEl.textContent = `Scene ${i+1} of ${scenes.length} · ${titles[i]}`;
+    chaps.querySelectorAll('.chap').forEach((b,j)=>b.setAttribute('aria-current', j===i ? 'true':'false'));
+    paintBar();
+  }
+  function paintBar(){ segs.forEach((s,j)=> s.style.width = j<idx ? '100%' : j>idx ? '0%' : (k/lines[idx].length*100)+'%'); }
+
+  function stopAudio(){ token++; clearTimeout(timer); clearTimeout(safety); if (synth) synth.cancel(); }
+
+  function sayNext(){
+    const my = ++token;
+    clearTimeout(timer); clearTimeout(safety);
+    if (k >= lines[idx].length){
+      if (idx < scenes.length-1){ timer = setTimeout(()=>{ if(my===token){ show(idx+1); sayNext(); } }, 700); }
+      else { playing = false; capEl.textContent=''; setUI(); playBtn.textContent='Replay'; }
+      return;
+    }
+    const text = lines[idx][k];
+    capEl.textContent = text;
+    const rate = parseFloat(rateSel.value);
+    const est = (text.split(/\s+/).length * 0.4 + 0.5) / rate * 1000;
+    const done = () => { if (my !== token) return; k++; paintBar(); sayNext(); };
+    if (voiceOn.checked && synth){
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text.replace(/LiteGuard/g,'Lite Guard'));
+      if (voice) u.voice = voice;
+      u.rate = rate; u.onend = done; u.onerror = done;
+      synth.speak(u);
+      safety = setTimeout(done, est * 1.8 + 2500);  // in case the browser never fires onend
+    } else {
+      timer = setTimeout(done, est);
+    }
+  }
+
+  function setUI(){
+    stage.classList.toggle('paused', !playing);
+    playBtn.textContent = playing ? 'Pause' : 'Play';
+    overlay.hidden = playing || stage.dataset.started === '1';
+  }
+  function play(){
+    stage.dataset.started = '1';
+    if (playBtn.textContent === 'Replay'){ show(0); }
+    playing = true; setUI(); sayNext();
+  }
+  function pause(){ playing = false; stopAudio(); setUI(); }
+  function go(i){
+    stopAudio(); show(Math.max(0, Math.min(scenes.length-1, i)));
+    capEl.textContent = '';
+    stage.classList.remove('paused');   // let a jumped-to scene animate even when paused
+    if (playing) sayNext();
+  }
+
+  playBtn.onclick = () => playing ? pause() : play();
+  overlay.onclick = play;
+  document.getElementById('prev').onclick = () => go(idx-1);
+  document.getElementById('next').onclick = () => go(idx+1);
+  chaps.onclick = e => { const b = e.target.closest('.chap'); if (b) go(+b.dataset.i); };
+  bar.onclick = e => { const b = e.target.closest('.seg'); if (b) go(+b.dataset.i); };
+  voiceOn.onchange = () => { if (playing){ stopAudio(); sayNext(); } };
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input,select')) return;
+    if (e.key === ' ' ){ e.preventDefault(); playing ? pause() : play(); }
+    if (e.key === 'ArrowRight') go(idx+1);
+    if (e.key === 'ArrowLeft') go(idx-1);
+  });
+  show(0);
+})();
+</script>
